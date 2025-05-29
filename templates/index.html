@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Background Remover</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Background Remover</h1>
+        
+        <div class="upload-area" onclick="document.getElementById('imageInput').click()">
+            <div class="upload-icon">📸</div>
+            <div class="upload-text">Click to upload an image</div>
+            <div class="upload-subtext">or drag and drop your image here</div>
+            <div class="upload-subtext">Supports: PNG, JPG, JPEG, GIF</div>
+        </div>
+        
+        <input type="file" id="imageInput" accept="image/*">
+        
+        <div style="text-align: center;">
+            <button class="btn" id="processBtn" onclick="processImage()" disabled>
+                Remove Background
+            </button>
+            <button class="btn" id="downloadBtn" onclick="downloadImage()" style="display: none;">
+                Download Result
+            </button>
+        </div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div>Processing your image...</div>
+        </div>
+        
+        <div class="error" id="error"></div>
+        <div class="success" id="success"></div>
+        
+        <div class="image-container" id="imageContainer" style="display: none;">
+            <div class="image-box">
+                <h3>Original Image</h3>
+                <img id="originalImage" class="image-preview" alt="Original">
+            </div>
+            <div class="image-box">
+                <h3>Background Removed</h3>
+                <div class="transparency-grid">
+                    <img id="processedImage" class="image-preview transparent-image" alt="Processed">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+        let processedImageData = null;
+
+        // File input change handler
+        document.getElementById('imageInput').addEventListener('change', function(e) {
+            handleFileSelect(e.target.files[0]);
+        });
+
+        // Drag and drop handlers
+        const uploadArea = document.querySelector('.upload-area');
+        
+        uploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFileSelect(e.dataTransfer.files[0]);
+        });
+
+        function handleFileSelect(file) {
+            if (!file) return;
+            
+            if (!file.type.startsWith('image/')) {
+                showError('Please select a valid image file.');
+                return;
+            }
+            
+            selectedFile = file;
+            
+            // Preview the original image
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('originalImage').src = e.target.result;
+                document.getElementById('imageContainer').style.display = 'flex';
+                document.getElementById('processBtn').disabled = false;
+            };
+            reader.readAsDataURL(file);
+            
+            hideMessages();
+        }
+
+        async function processImage() {
+            if (!selectedFile) {
+                showError('Please select an image first.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('image', selectedFile);
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('processBtn').disabled = true;
+            hideMessages();
+
+            try {
+                const response = await fetch('/remove-background', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    processedImageData = result.image;
+                    document.getElementById('processedImage').src = result.image;
+                    document.getElementById('downloadBtn').style.display = 'inline-block';
+                    showSuccess('Background removed successfully!');
+                } else {
+                    showError(result.error || 'An error occurred while processing the image.');
+                }
+            } catch (error) {
+                showError('Network error. Please try again.');
+                console.error('Error:', error);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('processBtn').disabled = false;
+            }
+        }
+
+        function downloadImage() {
+            if (!processedImageData) return;
+            
+            const link = document.createElement('a');
+            link.href = processedImageData;
+            link.download = 'background-removed.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.getElementById('success');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+        }
+
+        function hideMessages() {
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('success').style.display = 'none';
+        }
+    </script>
+</body>
+</html> 

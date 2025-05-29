@@ -1,16 +1,58 @@
+from flask import Flask, request, send_file, render_template, jsonify
 from rembg import remove
 from PIL import Image
+import io
+import base64
+import os
 
-input_path = 'input.png'  # Replace with your image file
-output_path = 'output.png' # Where the transparent image will be saved
+app = Flask(__name__)
 
-# Open the input image
-input_image = Image.open(input_path)
+# Configure upload folder
+UPLOAD_FOLDER = 'uploads'
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
-# Remove the background
-output_image = remove(input_image)
+# Configure static folder for CSS/JS files
+app.static_folder = 'static'
 
-# Save the output image with transparent background
-output_image.save(output_path)
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-print(f"Background removed and saved to {output_path}")
+@app.route('/remove-background', methods=['POST'])
+def remove_background():
+    try:
+        if 'image' not in request.files:
+            return jsonify({'error': 'No image file provided'}), 400
+        
+        file = request.files['image']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Read the image
+        input_image = Image.open(file.stream)
+        
+        # Remove background
+        output_image = remove(input_image)
+        
+        # Convert to base64 for frontend display
+        img_buffer = io.BytesIO()
+        output_image.save(img_buffer, format='PNG')
+        img_buffer.seek(0)
+        
+        img_base64 = base64.b64encode(img_buffer.getvalue()).decode()
+        
+        return jsonify({
+            'success': True,
+            'image': f"data:image/png;base64,{img_base64}"
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/download/<filename>')
+def download_file(filename):
+    return send_file(filename, as_attachment=True)
+
+if __name__ == '__main__':
+    app.run(debug=True)
